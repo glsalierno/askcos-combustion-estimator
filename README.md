@@ -119,4 +119,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 The authors acknowledge the **ASKCOS** project at MIT for the synthesis-prediction API; **RDKit** for SMILES validation and normalization; and the **thermo** package for thermodynamic property calculations.
 
-*Document last updated: February 2026*
+*Document last updated: March 2026*
