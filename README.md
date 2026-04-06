@@ -56,6 +56,28 @@ The workflow comprises two main scripts.
    ```
    By default, the script reads from `DFP_smiles.csv` and writes to a timestamped file of the form `output_reactivity_oxygen_<timestamp>.csv`. The reagent is set to molecular oxygen (O=O). Progress may be saved at regular intervals by adjusting the `save_interval` parameter (default: every 10 compounds).
 
+   **Command-line options (original mode):** `--input` / `-i`, `--output` / `-o`, `--reagent`, `--save-interval`, `--askcos-url` (default `http://0.0.0.0`).
+
+### Iterative mode (branch `iterative-askcos`)
+
+Recursive ASKCOS expansion: each predicted product is fed back into ASKCOS until a **fully oxidized** terminal pattern is reached (e.g. CO₂, H₂O), **max depth** is hit, or branch probability falls below a **threshold**. Cycles along a pathway are skipped.
+
+```bash
+python process_reactivity_oxygen.py --iterative -i DFP_smiles.csv -o pathways_out \
+  --max-depth 5 --prob-threshold 0.01 --askcos-url http://127.0.0.1
+```
+
+Output CSV columns:
+
+| Column | Description |
+|--------|-------------|
+| `original_smiles` | Input fuel |
+| `pathway` | Arrow-separated SMILES from fuel to leaf (e.g. `CCO -> CC=O -> O=C=O`) |
+| `probability` | Product of ASKCOS branch probabilities along the pathway |
+| `cumulative_delta_g_kj_per_mol` | Sum of approximate ΔG (kJ/mol) per balanced step using `thermo` (R + *a* O₂ + *b* H₂O → P with C conserved); 0 if balance fails |
+
+Dependencies are unchanged (`requirements.txt`). No Cantera or extra packages beyond the original stack.
+
 2. **Computation of ΔG<sub>f</sub>.** After obtaining the prediction output, run:
    ```bash
    python calculate_delta_gf.py
@@ -70,7 +92,7 @@ Input CSV files must include a column named `smiles`. The user may modify the de
 
 | Script | Function |
 |--------|----------|
-| `process_reactivity_oxygen.py` | Calls the ASKCOS API with reagent O=O and writes predicted products and associated metadata to a CSV file. |
+| `process_reactivity_oxygen.py` | Calls the ASKCOS API with reagent O=O and writes predicted products and associated metadata to a CSV file. Supports **`--iterative`** for recursive pathways (see above). |
 | `calculate_delta_gf.py` | Reads a prediction output CSV, computes ΔG<sub>f</sub> for all unique SMILES, and writes the results to CSV. |
 
 ---
@@ -89,6 +111,17 @@ Representative ΔG<sub>f</sub> output:
 |--------|----------|
 | CCO    | -41.2    |
 | CC=O   | -30.5    |
+
+---
+
+## Tests
+
+Mocked ASKCOS (no live server) exercise both **original** and **iterative** pipelines:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/ -v
+```
 
 ---
 
