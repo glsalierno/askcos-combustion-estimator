@@ -311,14 +311,14 @@ def recursive_combustion(
         return []
 
     if depth >= max_depth or is_fully_oxidized(n):
-        return [([n], cum_prob, cum_delta_g)]
+        return [([n], cum_prob, cum_delta_g_kj)]
 
     if n in visited:
         return []
 
     result = send_askcs_forward_synthesis(smiles, reagent, base_url=base_url)
     if not result["success"] or not result["products"]:
-        return [([n], cum_prob, cum_delta_g)]
+        return [([n], cum_prob, cum_delta_g_kj)]
 
     out: List[Tuple[List[str], float, float]] = []
     products_sorted = []
@@ -365,7 +365,7 @@ def recursive_combustion(
             any_child = True
 
     if not any_child:
-        return [([n], cum_prob, cum_delta_g)]
+        return [([n], cum_prob, cum_delta_g_kj)]
     return out
 
 

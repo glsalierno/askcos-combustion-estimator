@@ -114,6 +114,17 @@ Representative ΔG<sub>f</sub> output:
 
 ---
 
+## Tests
+
+Mocked ASKCOS (no live server) exercise both **original** and **iterative** pipelines:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests/ -v
+```
+
+---
+
 ## Known Limitations
 
 - The ASKCOS predictions are based on machine-learning models and are not equivalent to detailed combustion or kinetic simulations. The results should be interpreted as **estimates** only.
