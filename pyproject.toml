@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "askcos-iterative"
+version = "0.2.0"
+description = "Iterative ASKCOS combustion pathway predictor"
+readme = "README.md"
+authors = [{ name = "Gabriel Salierno", email = "glsalierno@gmail.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.31",
+    "pandas>=2.0",
+    "rdkit>=2023.9",
+    "thermo>=0.2",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7", "networkx>=3.0"]
+
+[project.scripts]
+askcos-iterative = "process_reactivity_oxygen:main"
+
+[tool.setuptools]
+py-modules = ["process_reactivity_oxygen", "visualize_pathways"]

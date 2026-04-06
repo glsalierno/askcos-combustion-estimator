@@ -115,5 +115,25 @@ def test_recursive_combustion_returns_empty_for_invalid(monkeypatch):
         prob_threshold=0.01,
         max_products=12,
         base_url="http://test",
+        combine_products_in_step=False,
     )
     assert paths == []
+
+
+def test_balance_multi_dehydration_ethanol():
+    """C2H5OH -> C2H4 + H2O; no O2/H2O on reactant side (a=b=0)."""
+    bal = pr.balance_multi_product("CCO", ["C=C", "[OH2]"])
+    assert bal is not None
+    a, b = bal
+    assert a == pytest.approx(0.0)
+    assert b == pytest.approx(0.0)
+
+
+def test_balance_multi_benzene_to_co2_water():
+    """C6H6 + 7.5 O2 -> 6 CO2 + 3 H2O."""
+    prods = ["O=C=O"] * 6 + ["[OH2]"] * 3
+    bal = pr.balance_multi_product("c1ccccc1", prods)
+    assert bal is not None
+    a, b = bal
+    assert a == pytest.approx(7.5)
+    assert b == pytest.approx(0.0)

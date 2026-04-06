@@ -12,12 +12,12 @@ import argparse
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 import requests
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors
 from thermo import Chemical
 
 # --- Iterative-mode configuration (override via CLI where available) ---
@@ -105,6 +105,62 @@ def balance_o2_h2o(reactant_smiles: str, product_smiles: str) -> Optional[Tuple[
     if a < -1e-6 or b < -1e-6:
         return None
     return (max(a, 0.0), max(b, 0.0))
+
+
+def balance_multi_product(
+    reactant_smiles: str,
+    products: List[str],
+) -> Optional[Tuple[float, float]]:
+    """
+    Stoichiometry R + a O2 + b H2O -> P1 + P2 + ... (C/H/O only).
+    Carbon must be conserved (sum of C in products = reactant C).
+    Returns (a, b) or None if infeasible.
+    """
+    if not products:
+        return None
+    if len(products) == 1:
+        return balance_o2_h2o(reactant_smiles, products[0])
+    mr = Chem.MolFromSmiles(reactant_smiles)
+    if mr is None:
+        return None
+    cr, hr, or_ = _count_CHO(mr)
+    cp = hp = op = 0
+    for ps in products:
+        m = Chem.MolFromSmiles(ps)
+        if m is None:
+            return None
+        c, h, o = _count_CHO(m)
+        cp += c
+        hp += h
+        op += o
+    if cr != cp:
+        return None
+    b = (hp - hr) / 2.0
+    a = (op - or_ - b) / 2.0
+    if a < -1e-6 or b < -1e-6:
+        return None
+    return (max(a, 0.0), max(b, 0.0))
+
+
+def delta_g_multi_product(
+    reactant_norm: str,
+    product_norms: List[str],
+    o2_mol: float,
+    h2o_mol: float,
+) -> float:
+    """ΔG (kJ/mol) for R + a O2 + b H2O -> sum(products)."""
+    gr = _gf_j_per_mol(reactant_norm)
+    if gr is None:
+        return 0.0
+    gp_sum = 0.0
+    for p in product_norms:
+        g = _gf_j_per_mol(p)
+        if g is None:
+            return 0.0
+        gp_sum += g
+    gh2o = _gf_water_j_per_mol()
+    dg_j = gp_sum - gr - o2_mol * 0.0 - h2o_mol * gh2o
+    return dg_j / 1000.0
 
 
 def _gf_j_per_mol(smiles: str) -> Optional[float]:
@@ -301,10 +357,11 @@ def recursive_combustion(
     prob_threshold: float,
     max_products: int,
     base_url: str,
+    combine_products_in_step: bool = False,
 ) -> List[Tuple[List[str], float, float]]:
     """
-    Returns list of (pathway_smiles_list, cumulative_probability, cumulative_delta_g_kj_per_mol).
-    Pathway includes all intermediates from root through leaf.
+    Returns list of (pathway_segment_list, cumulative_probability, cumulative_delta_g_kj_per_mol).
+    Each segment is a SMILES string or \"P1 + P2 + ...\" for a multi-product step.
     """
     n = normalize_smiles(smiles)
     if n is None:
@@ -320,8 +377,7 @@ def recursive_combustion(
     if not result["success"] or not result["products"]:
         return [([n], cum_prob, cum_delta_g_kj)]
 
-    out: List[Tuple[List[str], float, float]] = []
-    products_sorted = []
+    products_sorted: List[Tuple[float, str]] = []
     for product in result["products"][:max_products]:
         inf = extract_product_info(product)
         ps = (inf.get("product_smiles") or "").strip()
@@ -331,21 +387,81 @@ def recursive_combustion(
         products_sorted.append((pr, ps))
     products_sorted.sort(key=lambda x: -x[0])
 
-    any_child = False
+    valid: List[Tuple[float, str, str]] = []
     for pr, ps in products_sorted:
         if pr < prob_threshold:
             continue
         pn = normalize_smiles(ps)
-        if pn is None or pn in visited:
+        if pn is None:
             continue
+        valid.append((pr, ps, pn))
 
-        bal = balance_o2_h2o(n, pn)
+    if not valid:
+        return [([n], cum_prob, cum_delta_g_kj)]
+
+    out: List[Tuple[List[str], float, float]] = []
+
+    if combine_products_in_step:
+        norms = [t[2] for t in valid]
+        if any(x in visited for x in norms):
+            return []
+        joint_prob = 1.0
+        for pr, _, _ in valid:
+            joint_prob *= pr
+        label = " + ".join(norms)
+        bal = balance_multi_product(n, norms)
         if bal is not None:
             o2_mol, h2o_mol = bal
-            step_dg = delta_g_step_kj_per_mol(n, pn, o2_mol, h2o_mol)
+            step_dg = delta_g_multi_product(n, norms, o2_mol, h2o_mol)
         else:
             step_dg = 0.0
+        new_prob = cum_prob * joint_prob
+        new_cum = cum_delta_g_kj + step_dg
+        organic = [x for x in norms if not is_fully_oxidized(x)]
+        vis_next = visited | {n}
+        if not organic:
+            return [([n, label], new_prob, new_cum)]
+        any_child = False
+        for pi in organic:
+            if pi in vis_next:
+                continue
+            ps_for_pi = ""
+            for _, ps, pn in valid:
+                if pn == pi:
+                    ps_for_pi = ps
+                    break
+            if not ps_for_pi:
+                continue
+            sub = recursive_combustion(
+                ps_for_pi,
+                reagent,
+                depth + 1,
+                new_prob,
+                new_cum,
+                vis_next,
+                max_depth=max_depth,
+                prob_threshold=prob_threshold,
+                max_products=max_products,
+                base_url=base_url,
+                combine_products_in_step=combine_products_in_step,
+            )
+            for path_rest, pprob, pdg in sub:
+                out.append(([n, label] + path_rest[1:], pprob, pdg))
+                any_child = True
+        if not any_child:
+            return [([n, label], new_prob, new_cum)]
+        return out
 
+    any_child = False
+    for pr, ps, pn in valid:
+        if pn in visited:
+            continue
+        bal = balance_multi_product(n, [pn])
+        if bal is not None:
+            o2_mol, h2o_mol = bal
+            step_dg = delta_g_multi_product(n, [pn], o2_mol, h2o_mol)
+        else:
+            step_dg = 0.0
         new_prob = cum_prob * pr
         new_cum = cum_delta_g_kj + step_dg
         sub = recursive_combustion(
@@ -359,6 +475,7 @@ def recursive_combustion(
             prob_threshold=prob_threshold,
             max_products=max_products,
             base_url=base_url,
+            combine_products_in_step=combine_products_in_step,
         )
         for path_rest, pprob, pdg in sub:
             out.append(([n] + path_rest, pprob, pdg))
@@ -477,10 +594,12 @@ def process_smiles_iterative(
     prob_threshold: float = PROB_THRESHOLD,
     max_products: int = MAX_PRODUCTS_PER_STEP,
     base_url: str = ASKCOS_BASE_URL,
-) -> None:
+    combine_products_in_step: bool = False,
+) -> str:
     """
     For each input SMILES, expand pathways recursively; write one row per pathway.
     Columns: original_smiles, pathway, probability, cumulative_delta_g_kj_per_mol
+    Returns path to the written CSV (timestamped filename).
     """
     df = pd.read_csv(input_csv)
     if "smiles" not in df.columns:
@@ -490,7 +609,10 @@ def process_smiles_iterative(
     total = len(df)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    print(f"\n[Iterative mode] max_depth={max_depth}, prob_threshold={prob_threshold}")
+    print(
+        f"\n[Iterative mode] max_depth={max_depth}, prob_threshold={prob_threshold}, "
+        f"combine_products_in_step={combine_products_in_step}"
+    )
     print(f"Starting at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, N={total}\n")
 
     for i, smiles in enumerate(df["smiles"], 1):
@@ -507,6 +629,7 @@ def process_smiles_iterative(
             prob_threshold=prob_threshold,
             max_products=max_products,
             base_url=base_url,
+            combine_products_in_step=combine_products_in_step,
         )
         if not paths:
             rows.append(
@@ -532,8 +655,10 @@ def process_smiles_iterative(
             pd.DataFrame(rows).to_csv(f"{output_csv}_{timestamp}.csv", index=False)
             print(f"  checkpoint -> {output_csv}_{timestamp}.csv ({len(rows)} rows)")
 
-    pd.DataFrame(rows).to_csv(f"{output_csv}_{timestamp}.csv", index=False)
-    print(f"\nDone. Wrote {len(rows)} rows to {output_csv}_{timestamp}.csv")
+    out_path = f"{output_csv}_{timestamp}.csv"
+    pd.DataFrame(rows).to_csv(out_path, index=False)
+    print(f"\nDone. Wrote {len(rows)} rows to {out_path}")
+    return out_path
 
 
 def main() -> None:
@@ -551,12 +676,33 @@ def main() -> None:
     parser.add_argument("--prob-threshold", type=float, default=PROB_THRESHOLD, help="Min branch probability (iterative).")
     parser.add_argument("--max-products", type=int, default=MAX_PRODUCTS_PER_STEP, help="Max ASKCOS products per step (iterative).")
     parser.add_argument("--askcos-url", default=ASKCOS_BASE_URL, help="ASKCOS server base URL.")
+    parser.add_argument(
+        "--combine-products",
+        action="store_true",
+        help="Iterative: treat all ASKCOS products in one response as co-products of a single step (balancing + joint probability).",
+    )
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="After iterative run, render pathway PNGs via visualize_pathways.py (requires matplotlib, networkx).",
+    )
+    parser.add_argument(
+        "--visualize-smiles",
+        default=None,
+        help="Only plot pathways for this original_smiles (optional; default: all rows).",
+    )
+    parser.add_argument(
+        "--visualize-dir",
+        type=str,
+        default=".",
+        help="Directory for pathway PNGs when using --visualize.",
+    )
     args = parser.parse_args()
 
     askcos_base = args.askcos_url.rstrip("/")
 
     if args.iterative:
-        process_smiles_iterative(
+        csv_path = process_smiles_iterative(
             args.input,
             args.output,
             reagent=args.reagent,
@@ -565,7 +711,17 @@ def main() -> None:
             prob_threshold=args.prob_threshold,
             max_products=args.max_products,
             base_url=askcos_base,
+            combine_products_in_step=args.combine_products,
         )
+        if args.visualize:
+            from visualize_pathways import visualize_from_csv
+
+            visualize_from_csv(
+                Path(csv_path),
+                Path(args.visualize_dir),
+                filter_smiles=args.visualize_smiles,
+                first_only=False,
+            )
     else:
         process_smiles_for_reactivity(
             args.input,
