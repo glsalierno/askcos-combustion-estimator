@@ -31,7 +31,7 @@ def pathway_to_graph(pathway_str: str) -> Tuple[nx.DiGraph, dict]:
         labels[nid] = seg if len(seg) <= 48 else seg[:45] + "…"
         G.add_node(nid)
         if i > 0:
-            G.add_edge(f"n{i-1}", nid)
+            G.add_edge(f"n{i - 1}", nid)
     return G, labels
 
 
@@ -67,7 +67,7 @@ def render_pathway_png(
     edge_labels = {}
     edges = list(G.edges())
     for i, (u, v) in enumerate(edges):
-        edge_labels[(u, v)] = f"step {i+1}"
+        edge_labels[(u, v)] = f"step {i + 1}"
 
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=7, ax=ax)
 
@@ -98,7 +98,12 @@ def visualize_from_csv(
     Returns list of written paths.
     """
     df = pd.read_csv(csv_path)
-    required = {"original_smiles", "pathway", "probability", "cumulative_delta_g_kj_per_mol"}
+    required = {
+        "original_smiles",
+        "pathway",
+        "probability",
+        "cumulative_delta_g_kj_per_mol",
+    }
     if not required.issubset(df.columns):
         raise ValueError(f"CSV must contain columns: {required}")
 
@@ -128,14 +133,34 @@ def visualize_from_csv(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    p = argparse.ArgumentParser(description="Visualize iterative pathway CSV as network graphs.")
-    p.add_argument("csv", type=Path, help="Pathways CSV from process_reactivity_oxygen.py --iterative")
-    p.add_argument("-o", "--out-dir", type=Path, default=Path("."), help="Output directory for PNGs")
-    p.add_argument("--smiles", default=None, help="Only plot rows with this original_smiles")
-    p.add_argument("--first-only", action="store_true", help="Only first pathway per original_smiles")
+    p = argparse.ArgumentParser(
+        description="Visualize iterative pathway CSV as network graphs."
+    )
+    p.add_argument(
+        "csv",
+        type=Path,
+        help="Pathways CSV from process_reactivity_oxygen.py --iterative",
+    )
+    p.add_argument(
+        "-o",
+        "--out-dir",
+        type=Path,
+        default=Path("."),
+        help="Output directory for PNGs",
+    )
+    p.add_argument(
+        "--smiles", default=None, help="Only plot rows with this original_smiles"
+    )
+    p.add_argument(
+        "--first-only",
+        action="store_true",
+        help="Only first pathway per original_smiles",
+    )
     args = p.parse_args(argv)
 
-    paths = visualize_from_csv(args.csv, args.out_dir, filter_smiles=args.smiles, first_only=args.first_only)
+    paths = visualize_from_csv(
+        args.csv, args.out_dir, filter_smiles=args.smiles, first_only=args.first_only
+    )
     for w in paths:
         print(f"Wrote {w}")
     return 0

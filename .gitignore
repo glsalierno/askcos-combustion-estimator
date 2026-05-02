@@ -1,7 +1,19 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 *.egg-info/
 .eggs/
 dist/
 build/
+htmlcov/
+.coverage
+validation/benchmark_results.csv
+validation/parity_plot.png
+monitor_run.log
+monitor_run.nohup.out
+
+# Timestamped local batch outputs (keep sample_output_*.csv etc.)
+output_iterative_*.csv
+output_reactivity_*_run_*.csv
+batch_smiles_n100.csv

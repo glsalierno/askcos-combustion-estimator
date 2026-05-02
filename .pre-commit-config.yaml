@@ -1,0 +1,45 @@
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+default_language_version:
+  python: python3
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: vulture
+        name: vulture (dead code ≥80%)
+        language: python
+        additional_dependencies: [vulture==2.11]
+        entry: vulture
+        args:
+          - .
+          - vulture_whitelist.py
+          - --min-confidence=80
+          - --exclude
+          - tests
+          - --exclude
+          - validation
+          - --exclude
+          - venv
+          - --exclude
+          - __pycache__
+          - --exclude
+          - build
+          - --exclude
+          - dist
+          - --sort-by-size
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        language: system
+        entry: pytest
+        args: [tests/, -q]
+        pass_filenames: false

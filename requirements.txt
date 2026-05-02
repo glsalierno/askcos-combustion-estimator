@@ -1,4 +1,10 @@
-requests
-pandas
-rdkit
-thermo
+# Runtime + dev/test tooling (pinned). Install: pip install -r requirements.txt
+# Optional viz/tests: pip install -r requirements-dev.txt
+requests==2.32.3
+pandas==2.2.3
+rdkit==2025.3.2
+thermo==0.6.0
+pytest==8.3.4
+pytest-cov==6.0.0
+matplotlib==3.8.4
+vulture==2.11

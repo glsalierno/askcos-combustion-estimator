@@ -1,7 +1,24 @@
 # ASKCOS Combustion Estimator
 
+```
+: ･ﾟ✧ : * ✧ ･ﾟ : * : ･ﾟ✧ D I G I T A L   P Y R O L Y S I S ✧ ･ﾟ : * : ･ﾟ✧ * : ･ﾟ
+```
+
+> ⚠️ **Requires a fully operational local ASKCOS instance**  
+> This method calls the ASKCOS API. You must install and run ASKCOS (see [Installation](#installation)) before using the estimator.
+
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- Run: pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing once, then replace XX below with the total coverage percent. -->
+![Coverage](https://img.shields.io/badge/coverage-59%25-yellowgreen)
+
+Continuous integration runs **pytest** with coverage; optional local hooks are described in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Release v2.0.0
+
+GitHub tag and notes: **[v2.0.0](https://github.com/glsalierno/askcos-combustion-estimator/releases/tag/v2.0.0)**.
+
+Version **2.0.0** highlights **iterative** combustion modeling: recursive ASKCOS calls along oxidation pathways, **one row per pathway** with branch probabilities and **`cumulative_delta_g_kj_per_mol`**, tunable **`--max-depth`** / **`--prob-threshold`**, optional **`--combine-products`**, and pathway figures via **`--visualize`** or **`visualize_pathways.py`** (install with `pip install -e ".[viz]"`). The same CLI also supports the original single-shot mode (`askcos-iterative` / `process_reactivity_oxygen.py`). CI (GitHub Actions), `.coveragerc`, validation helpers under **`validation/`**, and **`scripts/monitor_run.sh`** (periodic run/output checks) round out the release. See [Usage](#usage) for flags and examples.
 
 This repository provides a Python implementation that interfaces with the **ASKCOS API** (Automated System for Knowledge-based Continuous Organic Synthesis) to predict oxidation products for organic compounds and to estimate the **Gibbs free energy of combustion**. Combustion is treated as reaction with molecular oxygen (O=O) using ASKCOS forward-synthesis capabilities. The software is intended for **batch processing** of compounds supplied as a CSV list of SMILES strings.
 
@@ -28,13 +45,16 @@ where ΔG<sub>f</sub>(O₂) = 0 kcal/mol under standard conditions.
 
 - **Python:** version 3.8 or higher.
 - **Dependencies:** Install with `pip install -r requirements.txt`. Required packages include `requests`, `pandas`, `rdkit`, and `thermo`, among others (see `requirements.txt`).
-- **ASKCOS:** A local instance of the ASKCOS API server must be running (e.g., via Docker). The software is configured to communicate with the endpoint `http://0.0.0.0/api/forward/call-sync`. Installation and deployment of ASKCOS are described in the [ASKCOS documentation](https://github.com/ASKCOS/askcos) and in [ASKCOS_INSTALLATION.md](ASKCOS_INSTALLATION.md) within this repository.
+- **ASKCOS (required):** A **local** ASKCOS API server must be running so this package can call `http://<host>/api/forward/call-sync` (default base URL `http://0.0.0.0`). Deployment is typically via **Docker**. Plan for **at least ~8 GB RAM** for the ASKCOS stack on a workstation (more for large batches or concurrent jobs).
+- **Upstream guides:** [**ASKCOS on GitHub**](https://github.com/ASKCOS/askcos) — official installation and deployment documentation; this repo also includes [ASKCOS_INSTALLATION.md](ASKCOS_INSTALLATION.md) with project-specific notes.
 
 ---
 
 ## Installation
 
-**From a clone (editable install):**
+**ASKCOS:** Install and start the ASKCOS server **before** running predictions. Follow the [**ASKCOS repository**](https://github.com/ASKCOS/askcos) instructions (Docker-based deployment is typical). See [ASKCOS_INSTALLATION.md](ASKCOS_INSTALLATION.md) for additional context.
+
+**Python environment — from a clone:**
 
 ```bash
 git clone https://github.com/glsalierno/askcos-combustion-estimator.git
@@ -53,15 +73,32 @@ askcos-iterative --help
 
 **Development / tests:** `pip install -r requirements.txt -r requirements-dev.txt`
 
-It is necessary to install and start the ASKCOS server separately, following the instructions referenced above.
+---
+
+## Validation
+
+Benchmarking scripts compare iterative pathway predictions to placeholder experimental ΔG°comb values and write a parity plot. See the **[validation/](validation/)** folder and [validation/README.md](validation/README.md) for scope, limitations, and how to run `python validation/benchmark.py`.
 
 ---
 
 ## Usage
 
+### Original vs iterative prediction
+
+| Aspect | **Original mode** (default) | **Iterative mode** (`--iterative`) |
+|--------|-----------------------------|-------------------------------------|
+| **Behavior** | **One** ASKCOS request per input SMILES; records **up to three** ranked products per compound from that single response. | **Many** requests per compound: recursively re-invokes ASKCOS on successive products until a **fully oxidized** terminal (e.g. CO₂, H₂O), **`--max-depth`**, or **`--prob-threshold`** stops expansion. |
+| **Output** | Wide prediction CSV with `product_rank`, `product_smiles`, scores, raw API payload, etc. | Pathway CSV: **one row per pathway** with `pathway` (arrow-separated), branch **`probability`**, and **`cumulative_delta_g_kj_per_mol`** (sum of approximate step ΔG via `thermo`). |
+| **Cost / speed** | ~**N** API calls for **N** compounds. | **Much higher** load and runtime—scales with branching and pathway length; avoid huge batches without tuning depth/threshold. |
+| **Typical use** | Screening, quick oxidation suggestions, downstream **`calculate_delta_gf.py`**. | Multi-step combustion routes, pathway-level probabilities, and cumulative model ΔG along oxidation sequences. |
+
+Prefer **original** mode unless you need full pathways and cumulative ΔG columns.
+
+---
+
 The workflow comprises two main scripts.
 
-1. **Product prediction.** Execute:
+1. **Product prediction (original mode).** Execute:
    ```bash
    python process_reactivity_oxygen.py
    ```
@@ -69,7 +106,7 @@ The workflow comprises two main scripts.
 
    **Command-line options (original mode):** `--input` / `-i`, `--output` / `-o`, `--reagent`, `--save-interval`, `--askcos-url` (default `http://0.0.0.0`).
 
-### Iterative mode (merged to `main`)
+### Iterative mode (`--iterative`)
 
 Recursive ASKCOS expansion: each predicted product is fed back into ASKCOS until a **fully oxidized** terminal pattern is reached (e.g. CO₂, H₂O), **max depth** is hit, or branch probability falls below a **threshold**. Cycles along a pathway are skipped.
 
@@ -151,6 +188,14 @@ pip install -e ".[viz]"
 pytest tests/ -v
 ```
 
+**Coverage** (terminal summary + HTML report under `htmlcov/`):
+
+```bash
+pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html
+```
+
+After running once, update the coverage badge at the top of this README: replace `XX` with the reported total percentage.
+
 ---
 
 ## Known Limitations
@@ -162,11 +207,13 @@ pytest tests/ -v
 - The parsing of ASKCOS responses assumes a specific output structure. If the local ASKCOS deployment returns a different format, the parsing logic may require adaptation.
 - The software is designed for use with a **local** ASKCOS instance; cloud or other remote deployments are not supported in the current version.
 
+> **Extensibility**: Although designed for O₂ combustion, the framework can be adapted for other reagents by modifying the reagent SMILES in `process_reactivity_oxygen.py` and the balancing logic in `calculate_delta_gf.py`. See inline comments.
+
 ---
 
 ## Contributing
 
-Contributions are welcome. Potential extensions include: command-line arguments for input/output paths and reagents; automated reaction balancing for ΔG<sub>combustion</sub>; support for additional API endpoints; improved error handling; and visualization of structures (e.g., via RDKit). Please open an issue or submit a pull request as appropriate.
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for environment setup, style, tests, coverage, and pull request guidelines.
 
 ---
 
@@ -180,4 +227,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 The authors acknowledge the **ASKCOS** project at MIT for the synthesis-prediction API; **RDKit** for SMILES validation and normalization; and the **thermo** package for thermodynamic property calculations.
 
-*Document last updated: March 2026*
+*Document last updated: May 2026*

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "askcos-iterative"
-version = "0.2.0"
+version = "2.0.0"
 description = "Iterative ASKCOS combustion pathway predictor"
 readme = "README.md"
 authors = [{ name = "Gabriel Salierno", email = "glsalierno@gmail.com" }]
@@ -17,7 +17,7 @@ dependencies = [
     "thermo>=0.2",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
 ]
@@ -27,6 +27,14 @@ viz = ["matplotlib>=3.7", "networkx>=3.0"]
 
 [project.scripts]
 askcos-iterative = "process_reactivity_oxygen:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+# Coverage is normally invoked as:
+#   pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html
+# HTML report is written to htmlcov/
 
 [tool.setuptools]
 py-modules = ["process_reactivity_oxygen", "visualize_pathways"]

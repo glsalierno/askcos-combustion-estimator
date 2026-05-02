@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -58,7 +57,9 @@ def test_original_mode_writes_products(monkeypatch, tmp_path: Path):
     out = tmp_path / "out"
     inp.write_text("smiles\nCCO\n")
 
-    pr.process_smiles_for_reactivity(str(inp), str(out), save_interval=1, base_url="http://test")
+    pr.process_smiles_for_reactivity(
+        str(inp), str(out), save_interval=1, base_url="http://test"
+    )
 
     outs = list(tmp_path.glob("out_*.csv"))
     assert len(outs) == 1

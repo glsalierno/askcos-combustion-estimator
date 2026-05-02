@@ -57,14 +57,37 @@ def normalize_smiles(smiles: str) -> Optional[str]:
         return None
 
 
+def _flatten_askcos_product_list(products: Any) -> List[Any]:
+    """
+    ASKCOS forward responses often wrap outcomes as [[{...}, {...}, ...]] (one inner list
+    per query). Flatten one level so callers iterate over outcome dicts.
+    """
+    if not isinstance(products, list) or not products:
+        return []
+    flat: List[Any] = []
+    for item in products:
+        if isinstance(item, list):
+            flat.extend(item)
+        else:
+            flat.append(item)
+    return flat
+
+
 def extract_product_info(product: Union[Dict[str, Any], str]) -> Dict[str, Any]:
-    """Extract product information handling both dictionary and string formats."""
+    """Extract product information from ASKCOS outcome dicts or legacy shapes."""
     if isinstance(product, dict):
+        smiles = product.get("smiles") or product.get("outcome") or ""
+        prob = product.get("probability")
+        if prob is None:
+            prob = product.get("prob")
+        mw = product.get("molecular_weight")
+        if mw is None:
+            mw = product.get("mol_wt")
         return {
-            "product_smiles": product.get("smiles", ""),
-            "probability": float(product.get("probability", 0.0) or 0.0),
+            "product_smiles": (smiles or "").strip(),
+            "probability": float(prob or 0.0),
             "score": float(product.get("score", 0.0) or 0.0),
-            "molecular_weight": float(product.get("molecular_weight", 0.0) or 0.0),
+            "molecular_weight": float(mw or 0.0),
         }
     return {
         "product_smiles": str(product),
@@ -87,7 +110,9 @@ def _count_CHO(mol: Chem.Mol) -> Tuple[int, int, int]:
     return c, h, o
 
 
-def balance_o2_h2o(reactant_smiles: str, product_smiles: str) -> Optional[Tuple[float, float]]:
+def balance_o2_h2o(
+    reactant_smiles: str, product_smiles: str
+) -> Optional[Tuple[float, float]]:
     """
     Stoichiometry R + a O2 + b H2O -> P with atom balance (C/H/O only).
     Returns (a, b) or None if carbon count differs or balance is infeasible.
@@ -183,26 +208,6 @@ def _gf_water_j_per_mol() -> float:
     return float(c.Gf)
 
 
-def delta_g_step_kj_per_mol(
-    reactant_norm: str,
-    product_norm: str,
-    o2_mol: float,
-    h2o_mol: float,
-) -> float:
-    """
-    ΔG for R + a O2 + b H2O -> P at standard state (approximate), in kJ/mol.
-    """
-    gr = _gf_j_per_mol(reactant_norm)
-    gp = _gf_j_per_mol(product_norm)
-    if gr is None or gp is None:
-        return 0.0
-    go2 = 0.0
-    gh2o = _gf_water_j_per_mol()
-    # products - reactants (J/mol)
-    dg_j = gp - gr - o2_mol * go2 - h2o_mol * gh2o
-    return dg_j / 1000.0
-
-
 def _canonical_set_from_patterns(patterns: List[str]) -> Set[str]:
     out: Set[str] = set()
     for p in patterns:
@@ -286,9 +291,12 @@ def send_askcs_forward_synthesis(
                         elif "products" in result:
                             products = result["products"]
                         else:
-                            print(f"[WARNING] Unexpected API response structure: {result}")
+                            print(
+                                f"[WARNING] Unexpected API response structure: {result}"
+                            )
                     else:
                         print(f"[WARNING] API response is not a dict: {result}")
+                    products = _flatten_askcos_product_list(products)
                     return {
                         "success": True,
                         "error": None,
@@ -532,7 +540,9 @@ def process_smiles_for_reactivity(
                     }
                     results.append(product_data)
             else:
-                print(f"[WARNING] No products found for SMILES: {smiles}. Raw response: {result['raw_response']}")
+                print(
+                    f"[WARNING] No products found for SMILES: {smiles}. Raw response: {result['raw_response']}"
+                )
                 results.append(
                     {
                         "original_smiles": result["original_smiles"],
@@ -548,7 +558,9 @@ def process_smiles_for_reactivity(
                 )
         else:
             failed += 1
-            print(f"[ERROR] Failed to process SMILES: {smiles}. Error: {result['error']}. Raw response: {result['raw_response']}")
+            print(
+                f"[ERROR] Failed to process SMILES: {smiles}. Error: {result['error']}. Raw response: {result['raw_response']}"
+            )
             results.append(
                 {
                     "original_smiles": result["original_smiles"],
@@ -566,8 +578,8 @@ def process_smiles_for_reactivity(
         if i % save_interval == 0 or i == total:
             df_results = pd.DataFrame(results)
             df_results.to_csv(f"{output_csv}_{timestamp}.csv", index=False)
-            print(f"\nProgress update:")
-            print(f"Processed: {processed}/{total} ({processed/total*100:.1f}%)")
+            print("\nProgress update:")
+            print(f"Processed: {processed}/{total} ({processed / total * 100:.1f}%)")
             print(f"Successful: {successful}")
             print(f"Failed: {failed}")
             print(f"Results saved to: {output_csv}_{timestamp}.csv\n")
@@ -576,11 +588,11 @@ def process_smiles_for_reactivity(
     df_results.to_csv(f"{output_csv}_{timestamp}.csv", index=False)
 
     print(f"\nProcessing complete at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Final statistics:")
+    print("Final statistics:")
     print(f"Total processed: {processed}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
-    print(f"Success rate: {successful/total*100:.1f}%")
+    print(f"Success rate: {successful / total * 100:.1f}%")
     print(f"Results saved to: {output_csv}_{timestamp}.csv")
 
 
@@ -662,20 +674,56 @@ def process_smiles_iterative(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="ASKCOS combustion estimator (original or iterative).")
+    parser = argparse.ArgumentParser(
+        description="ASKCOS combustion estimator (original or iterative)."
+    )
     parser.add_argument(
         "--iterative",
         action="store_true",
         help="Recursive ASKCOS expansion with pathway CSV (see README).",
     )
-    parser.add_argument("--input", "-i", default="DFP_smiles.csv", help="Input CSV with column 'smiles'.")
-    parser.add_argument("--output", "-o", default="output_reactivity_oxygen", help="Output prefix (timestamp appended).")
-    parser.add_argument("--reagent", default="O=O", help="ASKCOS reagent SMILES (default O=O).")
-    parser.add_argument("--save-interval", type=int, default=10, help="Checkpoint every N rows (original mode).")
-    parser.add_argument("--max-depth", type=int, default=MAX_DEPTH, help="Max oxidation steps (iterative).")
-    parser.add_argument("--prob-threshold", type=float, default=PROB_THRESHOLD, help="Min branch probability (iterative).")
-    parser.add_argument("--max-products", type=int, default=MAX_PRODUCTS_PER_STEP, help="Max ASKCOS products per step (iterative).")
-    parser.add_argument("--askcos-url", default=ASKCOS_BASE_URL, help="ASKCOS server base URL.")
+    parser.add_argument(
+        "--input",
+        "-i",
+        default="DFP_smiles.csv",
+        help="Input CSV with column 'smiles'.",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default="output_reactivity_oxygen",
+        help="Output prefix (timestamp appended).",
+    )
+    parser.add_argument(
+        "--reagent", default="O=O", help="ASKCOS reagent SMILES (default O=O)."
+    )
+    parser.add_argument(
+        "--save-interval",
+        type=int,
+        default=10,
+        help="Checkpoint every N rows (original mode).",
+    )
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=MAX_DEPTH,
+        help="Max oxidation steps (iterative).",
+    )
+    parser.add_argument(
+        "--prob-threshold",
+        type=float,
+        default=PROB_THRESHOLD,
+        help="Min branch probability (iterative).",
+    )
+    parser.add_argument(
+        "--max-products",
+        type=int,
+        default=MAX_PRODUCTS_PER_STEP,
+        help="Max ASKCOS products per step (iterative).",
+    )
+    parser.add_argument(
+        "--askcos-url", default=ASKCOS_BASE_URL, help="ASKCOS server base URL."
+    )
     parser.add_argument(
         "--combine-products",
         action="store_true",
