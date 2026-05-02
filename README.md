@@ -4,10 +4,6 @@
 
 # ASKCOS Combustion Estimator
 
-```
-: ･ﾟ✧ : * ✧ ･ﾟ : * : ･ﾟ✧ D I G I T A L   P Y R O L Y S I S ✧ ･ﾟ : * : ･ﾟ✧ * : ･ﾟ
-```
-
 > ⚠️ **Requires a fully operational local ASKCOS instance**  
 > This method calls the ASKCOS API. You must install and run ASKCOS (see [Installation](#installation)) before using the estimator.
 
