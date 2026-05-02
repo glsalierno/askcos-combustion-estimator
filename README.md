@@ -223,6 +223,16 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ---
 
+## Citation
+
+Zenodo archives each GitHub release under its **own DOI**. For **v2.0.0** (iterative pathways release), cite the software record:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19964369.svg)](https://doi.org/10.5281/zenodo.19964369)
+
+Landing page: [zenodo.org/records/19964369](https://zenodo.org/records/19964369).
+
+---
+
 ## Acknowledgments
 
 The authors acknowledge the **ASKCOS** project at MIT for the synthesis-prediction API; **RDKit** for SMILES validation and normalization; and the **thermo** package for thermodynamic property calculations.
