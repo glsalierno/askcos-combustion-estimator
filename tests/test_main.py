@@ -49,9 +49,12 @@ def test_single_molecule_combustion_delta_g_numeric():
     bal = pr.balance_multi_product(r, prods)
     assert bal is not None
     a, b = bal
-    norms = [pr.normalize_smiles(p) for p in prods]
-    assert all(norms)
-    dg = pr.delta_g_multi_product(r, norms, a, b)  # type: ignore[arg-type]
+    norms: list[str] = []
+    for p in prods:
+        n = pr.normalize_smiles(p)
+        assert n is not None
+        norms.append(n)
+    dg = pr.delta_g_multi_product(r, norms, a, b)
     assert isinstance(dg, float)
     assert dg == dg  # not NaN
 

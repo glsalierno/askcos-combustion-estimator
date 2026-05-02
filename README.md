@@ -10,8 +10,9 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/glsalierno/askcos-combustion-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/glsalierno/askcos-combustion-estimator/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-60%25-yellowgreen.svg)](https://github.com/glsalierno/askcos-combustion-estimator/actions/workflows/ci.yml)
 
-**Coverage:** CI uploads **`coverage.xml`** (artifact `coverage-xml-py311`, Python 3.11 job) and prints **pytest-cov** in the log. Locally: **`pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html`** after installing dev dependencies.
+**Coverage:** CI prints **pytest-cov** totals and uploads **`coverage.xml`** (artifact **`coverage-xml-py311`**, Python 3.11 job). The badge reflects the approximate **branch-aware** total from `pytest --cov=.` over measured modules (refresh the **60%** label if it changes by several points). HTML report locally: **`pytest --cov=. --cov-config=.coveragerc --cov-report=html`**.
 
 Continuous integration runs **pytest** on Python **3.10** and **3.11**; optional **pre-commit** hooks are described below and in [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -234,7 +235,7 @@ From a dev install (`requirements-dev.txt`):
 pre-commit install          # once per clone
 pre-commit run --all-files  # trailing whitespace, YAML, ruff, vulture, pytest+cov
 
-vulture . vulture_whitelist.py --min-confidence=80 \
+vulture . --min-confidence=80 \
   --exclude tests --exclude validation --exclude venv --exclude __pycache__ \
   --exclude build --exclude dist --sort-by-size
 ```

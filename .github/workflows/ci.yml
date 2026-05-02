@@ -33,7 +33,7 @@ jobs:
 
       - name: Vulture (dead code, min confidence 80%)
         run: |
-          vulture . vulture_whitelist.py --min-confidence=80 \
+          vulture . --min-confidence=80 \
             --exclude tests --exclude validation --exclude venv --exclude __pycache__ \
             --exclude build --exclude dist \
             --sort-by-size
