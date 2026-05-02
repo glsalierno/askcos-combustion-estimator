@@ -18,7 +18,7 @@ A **local ASKCOS instance** is required to exercise live API paths (see the main
 ## Code style
 
 - Follow [PEP 8](https://peps.python.org/pep-0008/).
-- Use a consistent formatter and linter for the project (see `requirements-dev.txt` and `.pre-commit-config.yaml` if present). **Black** is a common choice; keep line length consistent project-wide.
+- Formatting and linting use **Ruff** (`ruff format`, `ruff check`), matching CI and `.pre-commit-config.yaml`.
 
 ## Pre-commit (optional)
 
@@ -29,7 +29,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 pre-commit install
 ```
 
-Hooks run the checks defined in `.pre-commit-config.yaml` (typically including **`pytest tests/`**). Run all hooks manually:
+Hooks run the checks defined in `.pre-commit-config.yaml` (including **`pytest tests/`** with **`--cov`**). Run all hooks manually:
 
 ```bash
 pre-commit run --all-files
@@ -42,15 +42,15 @@ pytest tests/ -v
 pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html
 ```
 
-Open `htmlcov/index.html` for the HTML report. After a successful run, you can refresh the coverage badge in the main README (replace `XX` with the reported percentage).
+Open `htmlcov/index.html` for the HTML report. CI exposes **`coverage.xml`** as a workflow artifact for downstream tooling.
 
 ## Acknowledgments
 
-This project relies on the **ASKCOS** software suite for reaction prediction and free energy estimation.  
+This project relies on the **ASKCOS** software suite for reaction prediction and free energy estimation.
 If you use this tool in your research, please also cite ASKCOS appropriately:
 
-> **ASKCOS: An open source chemical synthesis planning software**  
-> https://askcos.mit.edu/  
+> **ASKCOS: An open source chemical synthesis planning software**
+> https://askcos.mit.edu/
 > Coley, C. W., et al. (2017). "A graph-convolutional neural network model for the prediction of chemical reactivity." *Chemical Science*, 8(4), 3190–3203.
 
 Respect the ASKCOS license terms (MIT) and note that this estimator does **not** alter ASKCOS source code; it only calls its API.

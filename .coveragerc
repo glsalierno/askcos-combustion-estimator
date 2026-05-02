@@ -10,6 +10,8 @@ omit =
     .conda/*
     build/*
     dist/*
+    __pycache__/*
+    */site-packages/*
 
 [report]
 precision = 2
@@ -18,3 +20,5 @@ exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
     if TYPE_CHECKING:
+    raise AssertionError
+    raise NotImplementedError

@@ -1,0 +1,4 @@
+original_smiles,pathway,probability,cumulative_delta_g_kj_per_mol
+CCO,"CCO -> CC=O -> O=C=O",0.7735,-2845.12
+CCO,"CCO -> C=C + [OH2]",0.0512,-980.34
+CC,"CC -> CCO -> CC=O -> O=C=O",0.612,-3102.45

@@ -55,8 +55,8 @@ Key services:
 - Test the API: Open a browser or use curl to hit `http://0.0.0.0:8000/api/health/` (should return a status message).
 - For forward synthesis (relevant to our tool): Send a test request via curl:
 
-curl -X POST "http://0.0.0.0:8000/api/forward/call-sync" 
--H "Content-Type: application/json" 
+curl -X POST "http://0.0.0.0:8000/api/forward/call-sync"
+-H "Content-Type: application/json"
 -d '{"smiles": ["CCO"], "reagents": "O=O"}'
 
 - Expect a JSON response with predicted products.

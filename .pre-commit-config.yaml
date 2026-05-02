@@ -4,6 +4,14 @@ default_language_version:
   python: python3
 
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.10
     hooks:
@@ -38,8 +46,12 @@ repos:
         pass_filenames: false
 
       - id: pytest
-        name: pytest
+        name: pytest + coverage
         language: system
         entry: pytest
-        args: [tests/, -q]
+        args:
+          - tests/
+          - -q
+          - --cov=.
+          - --cov-config=.coveragerc
         pass_filenames: false

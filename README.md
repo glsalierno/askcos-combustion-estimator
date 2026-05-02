@@ -4,15 +4,16 @@
 
 # ASKCOS Combustion Estimator
 
-> ⚠️ **Requires a fully operational local ASKCOS instance**  
+> ⚠️ **Requires a fully operational local ASKCOS instance**
 > This method calls the ASKCOS API. You must install and run ASKCOS (see [Installation](#installation)) before using the estimator.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-<!-- Run: pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing once, then replace XX below with the total coverage percent. -->
-![Coverage](https://img.shields.io/badge/coverage-59%25-yellowgreen)
+[![CI](https://github.com/glsalierno/askcos-combustion-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/glsalierno/askcos-combustion-estimator/actions/workflows/ci.yml)
 
-Continuous integration runs **pytest** with coverage; optional local hooks are described in [CONTRIBUTING.md](CONTRIBUTING.md).
+**Coverage:** CI uploads **`coverage.xml`** (artifact `coverage-xml-py311`, Python 3.11 job) and prints **pytest-cov** in the log. Locally: **`pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html`** after installing dev dependencies.
+
+Continuous integration runs **pytest** on Python **3.10** and **3.11**; optional **pre-commit** hooks are described below and in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Release v2.0.0
 
@@ -149,6 +150,8 @@ Core dependencies remain `requirements.txt`. Visualization and tests use extras 
 
 Input CSV files must include a column named `smiles`. The user may modify the default input and output filenames in the scripts or extend the code to accept command-line arguments.
 
+**Bundled examples:** see **[examples/](examples/)** — `input_smiles.csv`, `sample_output_original.csv`, `sample_output_iterative.csv`, and `sample_delta_gf.csv`, plus [examples/README.md](examples/README.md) for copy-paste commands.
+
 ---
 
 ## Script Reference
@@ -161,26 +164,53 @@ Input CSV files must include a column named `smiles`. The user may modify the de
 
 ---
 
-## Example Output
+## Input and output examples
 
-Representative excerpt from the prediction output for ethanol (SMILES: `CCO`):
+### Input (batch CSV)
+
+Any workflow that reads compounds expects a column named **`smiles`**:
+
+```csv
+smiles
+CCO
+CC
+CCC
+```
+
+The same layout is in **[examples/input_smiles.csv](examples/input_smiles.csv)**.
+
+### Original mode output (ranked products)
+
+One row per **input × product rank** (up to three products). Full column set: `original_smiles`, `normalized_smiles`, `product_rank`, `product_smiles`, `probability`, `score`, `molecular_weight`, `error`, `raw_response`.
+
+Illustrative excerpt (ethanol `CCO`):
 
 | original_smiles | normalized_smiles | product_rank | product_smiles | probability | score | molecular_weight |
 |----------------|-------------------|--------------|----------------|-------------|-------|-------------------|
 | CCO            | CCO               | 1            | CC=O           | 0.85        | 0.92  | 44.05             |
 
-Representative ΔG<sub>f</sub> output:
+Committed sample: **[examples/sample_output_original.csv](examples/sample_output_original.csv)** (numbers and `raw_response` placeholders are **not** from a live run).
+
+### Iterative mode output (pathways)
+
+One row per **pathway**; see column table under [Usage](#usage). Sample file: **[examples/sample_output_iterative.csv](examples/sample_output_iterative.csv)**.
+
+### ΔG<sub>f</sub> table (`calculate_delta_gf.py`)
+
+Output shape: `smiles`, `delta_gf` (kcal/mol). Illustrative values:
 
 | smiles | delta_gf |
 |--------|----------|
 | CCO    | -41.2    |
 | CC=O   | -30.5    |
 
+Example file: **[examples/sample_delta_gf.csv](examples/sample_delta_gf.csv)**.
+
 ---
 
 ## Tests
 
-Mocked ASKCOS (no live server) exercise **original** and **iterative** pipelines, **multi-product balancing**, and **visualization**:
+Mocked ASKCOS (**no live server**) covers **original** and **iterative** pipelines, **multi-product balancing**, **visualization**, **`tests/test_main.py`** (module imports + methane ΔG + invalid SMILES), and **`tests/test_validation.py`** (benchmark table + parity plot smoke).
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
@@ -194,7 +224,22 @@ pytest tests/ -v
 pytest --cov=. --cov-config=.coveragerc --cov-report=term-missing --cov-report=html
 ```
 
-After running once, update the coverage badge at the top of this README: replace `XX` with the reported total percentage.
+---
+
+## Code quality
+
+From a dev install (`requirements-dev.txt`):
+
+```bash
+pre-commit install          # once per clone
+pre-commit run --all-files  # trailing whitespace, YAML, ruff, vulture, pytest+cov
+
+vulture . vulture_whitelist.py --min-confidence=80 \
+  --exclude tests --exclude validation --exclude venv --exclude __pycache__ \
+  --exclude build --exclude dist --sort-by-size
+```
+
+Formatting and linting match **CI** (`ruff format --check`, `ruff check`). The repository uses **ruff** for formatting (not Black).
 
 ---
 
