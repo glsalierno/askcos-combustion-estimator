@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/banner.svg" alt="ASKCOS Combustion Estimator — Predict fuel properties with the chemical kinetics API" width="100%" />
+</p>
+
 # ASKCOS Combustion Estimator
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
