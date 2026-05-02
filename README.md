@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/banner.svg" alt="ASKCOS Combustion Estimator — Predict fuel properties with the chemical kinetics API" width="100%" />
+</p>
+
 # ASKCOS Combustion Estimator
 
 ```
