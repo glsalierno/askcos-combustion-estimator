@@ -675,7 +675,9 @@ def process_smiles_iterative(
 
         if i % save_interval == 0 or i == total:
             pd.DataFrame(rows).to_csv(f"{output_csv}_{timestamp}.csv", index=False)
-            logger.info("Checkpoint %s_%s.csv (%d rows)", output_csv, timestamp, len(rows))
+            logger.info(
+                "Checkpoint %s_%s.csv (%d rows)", output_csv, timestamp, len(rows)
+            )
 
     out_path = f"{output_csv}_{timestamp}.csv"
     pd.DataFrame(rows).to_csv(out_path, index=False)

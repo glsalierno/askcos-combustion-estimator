@@ -42,7 +42,9 @@ def test_api_status(monkeypatch, status, allow, expected):
 
 def test_check_api_failure_exits_without_reading_batch(monkeypatch, caplog):
     monkeypatch.setattr(sys, "argv", ["askcos-iterative", "--check-api"])
-    monkeypatch.setattr(estimator.requests, "options", Mock(side_effect=requests.Timeout))
+    monkeypatch.setattr(
+        estimator.requests, "options", Mock(side_effect=requests.Timeout)
+    )
     read = Mock(side_effect=AssertionError("preflight must not read the input"))
     monkeypatch.setattr(estimator.pd, "read_csv", read)
 
