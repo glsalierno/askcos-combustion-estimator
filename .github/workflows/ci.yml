@@ -14,24 +14,28 @@ jobs:
         python-version: ["3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        id: install
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
           pip install -e ".[viz]"
 
-      - name: Ruff (lint + format check)
-        run: |
-          ruff format --check .
-          ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+
+      - name: Ruff lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ruff check --output-format github .
 
       - name: Vulture (dead code, min confidence 80%)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           vulture . --min-confidence=80 \
             --exclude tests --exclude validation --exclude venv --exclude __pycache__ \
@@ -39,13 +43,15 @@ jobs:
             --sort-by-size
 
       - name: Tests with coverage
+        id: tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           pytest tests/ -v --cov=. --cov-config=.coveragerc \
             --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage XML artifact
-        uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' && matrix.python-version == '3.11' }}
         with:
           name: coverage-xml-py311
           path: coverage.xml

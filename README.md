@@ -85,6 +85,16 @@ Benchmarking scripts compare iterative pathway predictions to placeholder experi
 
 ## Usage
 
+### Check the API before launching a batch
+
+`askcos-iterative --askcos-url http://localhost --check-api` checks reachability only.
+It sends an OPTIONS request to the configured route, with a bounded timeout, and does not read
+the input CSV or request a prediction. A successful result does not verify model inference.
+The command exits with status 1 if the configured route cannot be verified.
+
+Both `process_reactivity_oxygen.py` and `calculate_delta_gf.py` accept `--log-level`
+(default `INFO`) and `--log-file PATH` to append logs to a file as well as stderr.
+
 ### Original vs iterative prediction
 
 | Aspect | **Original mode** (default) | **Iterative mode** (`--iterative`) |
