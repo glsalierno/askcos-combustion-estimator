@@ -3,5 +3,5 @@ pytest==8.3.4
 pytest-cov==6.0.0
 vulture==2.11
 ruff==0.9.10
-pre-commit==4.1.0
+pre-commit==4.6.2
 networkx==3.2.1
