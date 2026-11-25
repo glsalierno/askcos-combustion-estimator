@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,9 @@ import pandas as pd
 import requests
 from rdkit import Chem
 from thermo import Chemical
+
+logger = logging.getLogger(__name__)
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 # --- Iterative-mode configuration (override via CLI where available) ---
 MAX_DEPTH = 5
@@ -41,7 +45,7 @@ def validate_smiles(smiles: str) -> bool:
         mol = Chem.MolFromSmiles(smiles)
         return mol is not None
     except Exception as e:
-        print(f"Error validating SMILES {smiles}: {str(e)}")
+        logger.warning("Invalid SMILES %r (%s)", smiles, type(e).__name__)
         return False
 
 
@@ -53,7 +57,7 @@ def normalize_smiles(smiles: str) -> Optional[str]:
             return None
         return Chem.MolToSmiles(mol, isomericSmiles=True)
     except Exception as e:
-        print(f"Error normalizing SMILES {smiles}: {str(e)}")
+        logger.warning("Could not normalize SMILES %r (%s)", smiles, type(e).__name__)
         return None
 
 
@@ -195,8 +199,12 @@ def _gf_j_per_mol(smiles: str) -> Optional[float]:
         g = getattr(c, "Gf", None)
         if g is not None:
             return float(g)
-    except Exception:
-        pass
+    except Exception as error:
+        logger.warning(
+            "Thermochemistry lookup failed for SMILES %r (%s)",
+            smiles,
+            type(error).__name__,
+        )
     return None
 
 
@@ -291,11 +299,9 @@ def send_askcs_forward_synthesis(
                         elif "products" in result:
                             products = result["products"]
                         else:
-                            print(
-                                f"[WARNING] Unexpected API response structure: {result}"
-                            )
+                            logger.warning("ASKCOS returned no result/products field")
                     else:
-                        print(f"[WARNING] API response is not a dict: {result}")
+                        logger.warning("ASKCOS returned a non-object response")
                     products = _flatten_askcos_product_list(products)
                     return {
                         "success": True,
@@ -515,11 +521,10 @@ def process_smiles_for_reactivity(
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    print(f"\nStarting processing at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Total SMILES to process: {total}\n")
+    logger.info("Original mode: processing %d inputs", total)
 
     for i, smiles in enumerate(df["smiles"], 1):
-        print(f"Processing {i}/{total}: {smiles}")
+        logger.debug("Processing %d/%d: %r", i, total, smiles)
 
         result = send_askcs_forward_synthesis(smiles, reagent, base_url=base_url)
         processed += 1
@@ -540,9 +545,7 @@ def process_smiles_for_reactivity(
                     }
                     results.append(product_data)
             else:
-                print(
-                    f"[WARNING] No products found for SMILES: {smiles}. Raw response: {result['raw_response']}"
-                )
+                logger.warning("No products found for SMILES %r", smiles)
                 results.append(
                     {
                         "original_smiles": result["original_smiles"],
@@ -558,9 +561,7 @@ def process_smiles_for_reactivity(
                 )
         else:
             failed += 1
-            print(
-                f"[ERROR] Failed to process SMILES: {smiles}. Error: {result['error']}. Raw response: {result['raw_response']}"
-            )
+            logger.error("Failed to process SMILES %r: %s", smiles, result["error"])
             results.append(
                 {
                     "original_smiles": result["original_smiles"],
@@ -578,22 +579,29 @@ def process_smiles_for_reactivity(
         if i % save_interval == 0 or i == total:
             df_results = pd.DataFrame(results)
             df_results.to_csv(f"{output_csv}_{timestamp}.csv", index=False)
-            print("\nProgress update:")
-            print(f"Processed: {processed}/{total} ({processed / total * 100:.1f}%)")
-            print(f"Successful: {successful}")
-            print(f"Failed: {failed}")
-            print(f"Results saved to: {output_csv}_{timestamp}.csv\n")
+            logger.info(
+                "Processed %d/%d (%.1f%%): %d successful, %d failed; checkpoint %s_%s.csv",
+                processed,
+                total,
+                processed / total * 100,
+                successful,
+                failed,
+                output_csv,
+                timestamp,
+            )
 
     df_results = pd.DataFrame(results)
     df_results.to_csv(f"{output_csv}_{timestamp}.csv", index=False)
 
-    print(f"\nProcessing complete at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("Final statistics:")
-    print(f"Total processed: {processed}")
-    print(f"Successful: {successful}")
-    print(f"Failed: {failed}")
-    print(f"Success rate: {successful / total * 100:.1f}%")
-    print(f"Results saved to: {output_csv}_{timestamp}.csv")
+    logger.info(
+        "Finished %d/%d: %d successful, %d failed; wrote %s_%s.csv",
+        processed,
+        total,
+        successful,
+        failed,
+        output_csv,
+        timestamp,
+    )
 
 
 def process_smiles_iterative(
@@ -621,14 +629,16 @@ def process_smiles_iterative(
     total = len(df)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    print(
-        f"\n[Iterative mode] max_depth={max_depth}, prob_threshold={prob_threshold}, "
-        f"combine_products_in_step={combine_products_in_step}"
+    logger.info(
+        "Iterative mode: %d inputs (max_depth=%d, prob_threshold=%g, combine_products=%s)",
+        total,
+        max_depth,
+        prob_threshold,
+        combine_products_in_step,
     )
-    print(f"Starting at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, N={total}\n")
 
     for i, smiles in enumerate(df["smiles"], 1):
-        print(f"{i}/{total}: {smiles}")
+        logger.debug("Processing %d/%d: %r", i, total, smiles)
         orig = str(smiles)
         paths = recursive_combustion(
             orig,
@@ -665,12 +675,48 @@ def process_smiles_iterative(
 
         if i % save_interval == 0 or i == total:
             pd.DataFrame(rows).to_csv(f"{output_csv}_{timestamp}.csv", index=False)
-            print(f"  checkpoint -> {output_csv}_{timestamp}.csv ({len(rows)} rows)")
+            logger.info(
+                "Checkpoint %s_%s.csv (%d rows)", output_csv, timestamp, len(rows)
+            )
 
     out_path = f"{output_csv}_{timestamp}.csv"
     pd.DataFrame(rows).to_csv(out_path, index=False)
-    print(f"\nDone. Wrote {len(rows)} rows to {out_path}")
+    logger.info("Wrote %d rows to %s", len(rows), out_path)
     return out_path
+
+
+def check_api(base_url: str) -> bool:
+    """Probe route reachability without submitting a prediction or a CSV."""
+    try:
+        with requests.options(
+            f"{base_url.rstrip('/')}{ASKCOS_ENDPOINT}",
+            timeout=(3.05, 5),
+            allow_redirects=False,
+        ) as response:
+            allowed = {
+                method.strip().upper()
+                for method in response.headers.get("Allow", "").split(",")
+            }
+            if 200 <= response.status_code < 300 or (
+                response.status_code == 405 and "POST" in allowed
+            ):
+                logger.info(
+                    "ASKCOS route %s is reachable (HTTP %d)",
+                    ASKCOS_ENDPOINT,
+                    response.status_code,
+                )
+                return True
+            logger.error(
+                "ASKCOS route %s could not be verified (HTTP %d); check --askcos-url and server access",
+                ASKCOS_ENDPOINT,
+                response.status_code,
+            )
+    except requests.exceptions.RequestException as error:
+        logger.error(
+            "ASKCOS connection failed (%s); check --askcos-url and server status",
+            type(error).__name__,
+        )
+    return False
 
 
 def main() -> None:
@@ -725,6 +771,15 @@ def main() -> None:
         "--askcos-url", default=ASKCOS_BASE_URL, help="ASKCOS server base URL."
     )
     parser.add_argument(
+        "--check-api",
+        action="store_true",
+        help="Check ASKCOS route reachability without running a CSV batch.",
+    )
+    parser.add_argument(
+        "--log-level", choices=LOG_LEVELS, type=str.upper, default="INFO"
+    )
+    parser.add_argument("--log-file", type=Path, help="Also append logs to this file.")
+    parser.add_argument(
         "--combine-products",
         action="store_true",
         help="Iterative: treat all ASKCOS products in one response as co-products of a single step (balancing + joint probability).",
@@ -746,8 +801,23 @@ def main() -> None:
         help="Directory for pathway PNGs when using --visualize.",
     )
     args = parser.parse_args()
+    handlers: List[logging.Handler] = [logging.StreamHandler()]
+    if args.log_file:
+        try:
+            handlers.append(logging.FileHandler(args.log_file, encoding="utf-8"))
+        except OSError as error:
+            parser.error(f"Could not open --log-file: {error}")
+    logging.basicConfig(
+        level=args.log_level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=handlers,
+    )
 
     askcos_base = args.askcos_url.rstrip("/")
+    if args.check_api:
+        if not check_api(askcos_base):
+            raise SystemExit(1)
+        return
 
     if args.iterative:
         csv_path = process_smiles_iterative(
